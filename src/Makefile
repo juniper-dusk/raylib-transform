@@ -25,8 +25,8 @@
 
 # Define required variables
 PROJECT_NAME       ?= raylib_game
-RAYLIB_VERSION     ?= 3.8.0
-RAYLIB_PATH        ?= C:/GitHub/raylib
+RAYLIB_VERSION     ?= 3.5.0
+RAYLIB_PATH        ?= /home/dev/raylib 
 
 # Define default options
 
@@ -50,7 +50,7 @@ RAYLIB_INSTALL_PATH   ?= $(DESTDIR)/lib
 RAYLIB_H_INSTALL_PATH ?= $(DESTDIR)/include
 
 # Library type used for raylib: STATIC (.a) or SHARED (.so/.dll)
-RAYLIB_LIBTYPE        ?= STATIC
+RAYLIB_LIBTYPE        ?= SHARED 
 
 # Build mode for project: DEBUG or RELEASE
 BUILD_MODE            ?= RELEASE
@@ -149,7 +149,7 @@ RAYLIB_RELEASE_PATH 	?= $(RAYLIB_PATH)/src
 # To see the result, run readelf -d core/core_basic_window; looking at the RPATH or RUNPATH attribute.
 # To see which libraries a built example is linking to, ldd core/core_basic_window;
 # Look for libraylib.so.1 => $(RAYLIB_INSTALL_PATH)/libraylib.so.1 or similar listing.
-EXAMPLE_RUNTIME_PATH   ?= $(RAYLIB_RELEASE_PATH)
+# EXAMPLE_RUNTIME_PATH   ?= $(RAYLIB_RELEASE_PATH)
 
 # Define default C compiler: gcc
 # NOTE: define g++ compiler if using C++
@@ -372,12 +372,7 @@ endif
 
 # Define all source files required
 PROJECT_SOURCE_FILES ?= \
-    raylib_game.c \
-    screen_logo.c \
-    screen_title.c \
-    screen_options.c \
-    screen_gameplay.c \
-    screen_ending.c
+    hello_world.c
 
 # Define all object files from source files
 OBJS = $(patsubst %.c, %.o, $(PROJECT_SOURCE_FILES))
