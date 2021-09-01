@@ -30,6 +30,23 @@ int main(void)
 
     InitWindow(screenWidth, screenHeight, "raylib [core] example - basic window");
 
+    Camera camera = { { 0.2f, 0.4f, 0.2f }, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f }, 45.0f, 0 };
+
+    Image image = LoadImage("resources/empty-map.png");
+    Texture2D cubicmap = LoadTextureFromImage(image);
+
+    Mesh mesh = GenMeshCubicmap(image, (Vector3){1.0f, 1.0f, 1.0f});
+    Model model = LoadModelFromMesh(mesh);
+
+    Texture2D texture = LoadTexture("resources/Brick_0.png");
+    model.materials[0].maps[MATERIAL_MAP_DIFFUSE].texture = texture;
+
+    Vector3 mapPosition = { -16.0f, 0.0f, -8.0f };          // Set model position
+
+    UnloadImage(image);     // Unload cubesmap image from RAM, already uploaded to VRAM
+
+    SetCameraMode(camera, CAMERA_FIRST_PERSON);  // Set an orbital camera mode
+
     SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
     //--------------------------------------------------------------------------------------
 
@@ -38,7 +55,7 @@ int main(void)
     {
         // Update
         //----------------------------------------------------------------------------------
-        // TODO: Update your variables here
+        UpdateCamera(&camera);              // Update camera
         //----------------------------------------------------------------------------------
 
         // Draw
@@ -47,7 +64,13 @@ int main(void)
 
             ClearBackground(RAYWHITE);
 
-            DrawText("Hello World!", 190, 200, 20, LIGHTGRAY);
+            BeginMode3D(camera);
+
+                DrawModel(model, mapPosition, 1.0f, WHITE);
+
+            EndMode3D();
+
+            DrawFPS(10, 10);
 
         EndDrawing();
         //----------------------------------------------------------------------------------
@@ -55,6 +78,10 @@ int main(void)
 
     // De-Initialization
     //--------------------------------------------------------------------------------------
+    UnloadTexture(cubicmap);    // Unload cubicmap texture
+    UnloadTexture(texture);     // Unload map texture
+    UnloadModel(model);         // Unload map model
+    
     CloseWindow();        // Close window and OpenGL context
     //--------------------------------------------------------------------------------------
 

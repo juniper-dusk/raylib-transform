@@ -25,7 +25,7 @@
 
 # Define required variables
 PROJECT_NAME       ?= raylib_game
-RAYLIB_VERSION     ?= 3.5.0
+RAYLIB_VERSION     ?= 3.7.0
 RAYLIB_PATH        ?= /home/dev/raylib 
 
 # Define default options
@@ -154,6 +154,7 @@ RAYLIB_RELEASE_PATH 	?= $(RAYLIB_PATH)/src
 # Define default C compiler: gcc
 # NOTE: define g++ compiler if using C++
 CC = gcc
+CXX = g++
 
 ifeq ($(PLATFORM),PLATFORM_DESKTOP)
     ifeq ($(PLATFORM_OS),OSX)
