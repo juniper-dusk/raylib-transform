@@ -20,12 +20,14 @@
 namespace GameEngine
 {
 
+const float EPSILON = 0.005;
+
 GameTransform::GameTransform()
 {
     // Zero out data, exists at (0, 0, 0) world space.
     const Vector3 origin = {0, 0, 0};
     SetLocalPosition(origin);
-    SetLocalRotation(origin);
+    SetLocalRotation({ {0, 0, 0}, 0 });
     SetLocalScale(origin);
     // Root node.
     parent = nullptr;
@@ -33,11 +35,11 @@ GameTransform::GameTransform()
 
 GameTransform::GameTransform(
     Vector3 localPosition,
-    Vector3 localEulerRotation,
+    RotationAxisAngle localRotation,
     Vector3 localScale)
 {
     SetLocalPosition(localPosition);
-    SetLocalRotation(localEulerRotation);
+    SetLocalRotation(localRotation);
     SetLocalScale(localScale);
     // Root node.
     parent = nullptr;
@@ -78,27 +80,25 @@ Vector3 GameTransform::GetWorldPosition() const
     return { ltwMat.m12 * scale_x, ltwMat.m13 * scale_y, ltwMat.m14 * scale_z };
 }
 
-Vector3 GameTransform::GetLocalRotation() const
+RotationAxisAngle GameTransform::GetLocalRotation() const
 {
-    return QuaternionToEuler(rotation);
+    // First verify that quaternion is not a scalar (i.e. no rotation).
+    if (sqrtf(1.0f - rotation.w*rotation.w) < EPSILON)
+    {
+        return { {0, 0, 0}, 0 };
+    }
+    Vector3 rotationAxis = {0, 0, 0};
+    float rotationAngle = 0;
+    QuaternionToAxisAngle(rotation, &rotationAxis, &rotationAngle);
+    return { rotationAxis, rotationAngle };
 }
 
-void GameTransform::SetLocalRotation(Vector3 localEulerRotation)
+void GameTransform::SetLocalRotation(RotationAxisAngle rotation)
 {
-    rotation = QuaternionFromEuler(localEulerRotation.x, localEulerRotation.y, localEulerRotation.z);
+    this->rotation = QuaternionFromAxisAngle(rotation.axis, rotation.angle);
 }
 
-Vector3 GameTransform::GetWorldRotation() const
-{
-    return QuaternionToEuler(GetWorldQuaternion());
-}
-
-Quaternion GameTransform::GetLocalQuaternion() const
-{
-    return rotation;
-}
-
-Quaternion GameTransform::GetWorldQuaternion() const
+RotationAxisAngle GameTransform::GetWorldRotation() const
 {
     // Get transformation matrix.
     Matrix ltwMat = GetLocalToWorldMatrix();
@@ -108,12 +108,22 @@ Quaternion GameTransform::GetWorldQuaternion() const
     float scale_z = Vector3Length({ ltwMat.m8, ltwMat.m9, ltwMat.m10 });
     // Extract rotation matrix.
     Matrix rotation_matrix = {
-        ltwMat.m0 / scale_x, ltwMat.m1 / scale_x, ltwMat.m2 / scale_x, 0.0f,
-        ltwMat.m4 / scale_y, ltwMat.m5 / scale_y, ltwMat.m6 / scale_y, 0.0f,
-        ltwMat.m8 / scale_z, ltwMat.m9 / scale_z, ltwMat.m10 / scale_z, 0.0f,
-        0.0f, 0.0f, 0.0f, 0.1f
+        ltwMat.m0 / scale_x, ltwMat.m4 / scale_y, ltwMat.m8 / scale_z,  0.0f,
+        ltwMat.m1 / scale_x, ltwMat.m5 / scale_y, ltwMat.m9 / scale_z,  0.0f,
+        ltwMat.m2 / scale_x, ltwMat.m6 / scale_y, ltwMat.m10 / scale_z, 0.0f,
+        0.0f,                0.0f,                0.0f,                 1.0f
     };
-    return QuaternionFromMatrix(rotation_matrix);
+
+    Quaternion rotationQuat = QuaternionFromMatrix(rotation_matrix);
+    if (sqrtf(1.0f - rotationQuat.w*rotationQuat.w) < EPSILON)
+    {
+        return { {0, 0, 0}, 0 };
+    }
+    Vector3 rotationAxis = {0.0, 0.0, 0.0};
+    float rotationAngle = 0.0;
+    QuaternionToAxisAngle(rotationQuat, &rotationAxis, &rotationAngle);
+
+    return { rotationAxis, rotationAngle };
 }
 
 Vector3 GameTransform::GetLocalScale() const
@@ -143,12 +153,12 @@ Matrix GameTransform::GetLocalToWorldMatrix() const
     if (parent)
     {
         // Recursively multiply the current transformation with the parent.
-        return MatrixMultiply(parent->GetLocalToWorldMatrix(), GetLocalMatrix());
+        return MatrixMultiply(parent->GetLocalToWorldMatrix(), MakeLocalToParent());
     }
     else
     {
         // Base case: root node.
-        return GetLocalMatrix();
+        return MakeLocalToParent();
     }
 }
 
@@ -156,32 +166,61 @@ Matrix GameTransform::GetLocalToWorldMatrix() const
 // so as to allow passing in various positions. For example, to set the world position here.
 Matrix GameTransform::GetWorldToLocalMatrix() const
 {
+    if (parent)
+    {
+        // Recursively multiply the current transformation with the parent.
+        return MatrixMultiply(parent->MakeParentToLocal(), GetWorldToLocalMatrix());
+    }
+    else
+    {
+        // Base case: root node.
+        return MakeParentToLocal();
+    }
     // To go in the opposite direction, simply invert the matrix.
-    return MatrixInvert(GetLocalToWorldMatrix());
+    // return MatrixInvert(GetLocalToWorldMatrix());
 }
 
-Matrix GameTransform::GetLocalMatrix() const
+Matrix GameTransform::MakeLocalToParent() const
 {
-    // Get matrices for translation from local to parent.
-    Matrix translationMatrix = MatrixTranslate(position.x, position.y, position.z);
-    // Get rotation from Quaternion.
-    Vector3 rotationAxis = {0.0f, 0.0f, 0.0f};
-    float rotationAngle = 0.0f;
-    QuaternionToAxisAngle(rotation, &rotationAxis, &rotationAngle);
-    Matrix rotationMatrix = MatrixRotate(rotationAxis, rotationAngle);
+    // Get matrices for transformation from local to parent.
     Matrix scaleMatrix = MatrixScale(scale.x, scale.y, scale.z);
-
-    // Order matters: scale, rotation, transformation.
+    Matrix rotationMatrix = QuaternionToMatrix(rotation);
+    Matrix translationMatrix = MatrixTranslate(position.x, position.y, position.z);
+    
+    // Order matters: scale * rotation + translation
     Matrix product = MatrixMultiply(scaleMatrix, rotationMatrix);
-    product = MatrixMultiply(product, translationMatrix);
+    Matrix transformationMatrix = MatrixMultiply(product, translationMatrix);
 
     // std::cout << "Local Matrix: " << std::endl;
-    // std::cout << product.m0 << product.m1 << product.m2 << product.m3 << std::endl;
-    // std::cout << product.m4 << product.m5 << product.m6 << product.m7 << std::endl;
-    // std::cout << product.m8 << product.m9 << product.m10 << product.m11 << std::endl;
-    // std::cout << product.m12 << product.m13 << product.m14 << product.m15 << std::endl;
+    // std::cout << product.m0 << " " << product.m4 << " " << product.m8 << " " << product.m12 << std::endl;
+    // std::cout << product.m1 << " " << product.m5 << " " << product.m9 << " " << product.m13 << std::endl;
+    // std::cout << product.m2 << " " << product.m6 << " " << product.m10 << " " << product.m14 << std::endl;
+    // std::cout << product.m3 << " " << product.m7 << " " << product.m11 << " " << product.m15 << std::endl;
 
-    return product;
+    return transformationMatrix;
+}
+
+Matrix GameTransform::MakeParentToLocal() const
+{
+    // Get inverse scale, avoid division by zero errors.
+    // Vector3 inverseScale = {
+    //     (scale.x == 0.0f ? 0.0f : 1.0f / scale.x),
+    //     (scale.y == 0.0f ? 0.0f : 1.0f / scale.y),
+    //     (scale.z == 0.0f ? 0.0f : 1.0f / scale.z)
+    // };
+    // Matrix inverseScaleMatrix = MatrixScale(inverseScale.x, inverseScale.y, inverseScale.z);
+    // // Get inverse rotation.
+    // Quaternion inverseRotation = QuaternionInvert(rotation);
+    // Matrix inverseRotationMatrix = QuaternionToMatrix(inverseRotation);
+    // // Get inverse translation.
+    // Matrix inverseTranslationMatrix = MatrixTranslate(position.x * -1, position.y * -1, position.z * -1);
+
+    // Matrix product = MatrixMultiply(inverseScaleMatrix, inverseRotationMatrix);
+    // Matrix transformationMatrix = MatrixAdd(product, MatrixMultiply(product, inverseTranslationMatrix));
+
+    // return transformationMatrix;
+
+    return MatrixInvert(MakeLocalToParent());
 }
 
 void GameTransform::SetParent(GameTransform* newParent, unsigned int childIndex)
@@ -197,7 +236,7 @@ void GameTransform::SetParent(GameTransform* newParent, unsigned int childIndex)
     {
         // Insert pointer to current node at given index in parent's children.
         auto iterator = children.begin();
-        std::advance(iterator, 5);
+        std::advance(iterator, childIndex);
         parent->children.insert(iterator, this);
     }
 }

@@ -16,9 +16,17 @@
 #include "raylib.h"
 #include <list>
 #include <memory>
+#include <utility>
 
 namespace GameEngine
 {
+
+//typedef std::pair<Vector3, float> RotationAxisAngle;
+typedef struct RotationAxisAngle
+{
+    Vector3 axis;
+    float   angle;
+} RotationAxisAngle;
 
 class GameTransform
 {
@@ -27,7 +35,7 @@ public:
     // Default constructor.
     GameTransform();
     // Verbose constructor in local space.
-    GameTransform(Vector3 localPosition, Vector3 localEulerRotation, Vector3 localScale);
+    GameTransform(Vector3 localPosition, RotationAxisAngle rotation, Vector3 localScale);
     // Disallow copies.
     GameTransform(const GameTransform& copy) = delete;
     // Default destructor.
@@ -42,13 +50,10 @@ public:
 
     // ROTATION PROPERTY.
     // Local.
-    Vector3 GetLocalRotation() const;
-    void SetLocalRotation(Vector3 localEulerRotation);
+    RotationAxisAngle GetLocalRotation() const;
+    void SetLocalRotation(RotationAxisAngle rotation);
     // World.
-    Vector3 GetWorldRotation() const;
-    // Quaternion rotation.
-    Quaternion GetWorldQuaternion() const;
-    Quaternion GetLocalQuaternion() const;
+    RotationAxisAngle GetWorldRotation() const;
 
     // SCALE PROPERTY.
     // Local.
@@ -76,14 +81,14 @@ protected:
     Vector3 position;
     // (W, X, Y, Z) quaternion describing rotation.
     Quaternion rotation;
+    // Store the axis/angle separately. Conversion is not well defined.
+    RotationAxisAngle rotationAxisAngle;
     // (X, Y, Z) scalar amounts.
     Vector3 scale;
 
-    // TODO: Store individual matrices, only compose when needed together, not individually.
-    // Maybe even use Quaternions along the hierarchy, instead of converting in between.
-
     // Matrix that transforms a point from local to world space.
-    Matrix GetLocalMatrix() const;
+    Matrix MakeLocalToParent() const;
+    Matrix MakeParentToLocal() const;
 };
 
 }
