@@ -39,7 +39,6 @@ public:
     void SetLocalPosition(Vector3 localPosition);
     // World.
     Vector3 GetWorldPosition() const;
-    void SetWorldPosition(Vector3 worldPosition);
 
     // ROTATION PROPERTY.
     // Local.
@@ -47,7 +46,9 @@ public:
     void SetLocalRotation(Vector3 localEulerRotation);
     // World.
     Vector3 GetWorldRotation() const;
-    void SetWorldRotation(Vector3 worldEulerRotation);
+    // Quaternion rotation.
+    Quaternion GetWorldQuaternion() const;
+    Quaternion GetLocalQuaternion() const;
 
     // SCALE PROPERTY.
     // Local.
@@ -55,7 +56,6 @@ public:
     void SetLocalScale(Vector3 localScale);
     // World.
     Vector3 GetWorldScale() const;
-    void SetWorldScale(Vector3 worldScale);
 
     // SPACE TRANSFORMATIONS.
     // Local to world space.
@@ -78,6 +78,9 @@ protected:
     Quaternion rotation;
     // (X, Y, Z) scalar amounts.
     Vector3 scale;
+
+    // TODO: Store individual matrices, only compose when needed together, not individually.
+    // Maybe even use Quaternions along the hierarchy, instead of converting in between.
 
     // Matrix that transforms a point from local to world space.
     Matrix GetLocalMatrix() const;
