@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
     // WORLD.
     GameTransform worldTransform(
         { 0.0, 0.0, 0.0 }, // Position
-        {{ 1.0, 1.0, 1.0 }, 0.0}, // Rotation
+        {{ 0.0, 1.0, 0.0 }, 0.0}, // Rotation
         { 1.0, 1.0, 1.0 }  // Scale
     );
     Texture2D texture = LoadTexture("resources/Brick_0.png");
@@ -37,7 +37,7 @@ int main(int argc, char* argv[])
     GameTransform cubeTransform(
         { 1.0, 1.0, 1.0 }, // Position
         {{ 1.0, 1.0, 1.0 }, 0.0 }, // Rotation
-        { 1.0, 1.0, 1.0 }  // Scale
+        { 2.0, 2.0, 2.0 }  // Scale
     );
     cubeTransform.SetParent(&worldTransform);
     // Model.
@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
     GameTransform sphereTransform(
         { 1.0, 1.0, 1.0 },
         {{ 1.0, 1.0, 1.0 }, 0.0},
-        { 1.0, 1.0, 1.0 }
+        { 0.5, 0.5, 0.5 }
     );
     sphereTransform.SetParent(&cubeTransform);
     // Model.
@@ -69,10 +69,13 @@ int main(int argc, char* argv[])
         //----------------------------------------------------------------------------------
         UpdateCamera(&camera);              // Update camera
         // Get rotation.
-        worldTransform.SetLocalRotation({ {1.0, 1.0, 1.0}, spin });
-        sphereTransform.SetLocalRotation({ {1.0, 1.0, 1.0}, spin * 2 });
+        // worldTransform.SetLocalRotation({ {0.0, 1.0, 0.0}, spin * 0.5f });
+        // cubeTransform.SetLocalRotation({ {0.0, 1.0, 0.0}, spin });
+        // sphereTransform.SetLocalRotation({ {1.0, 1.0, 1.0}, spin * 2 });
         RotationAxisAngle cubeRotation = cubeTransform.GetWorldRotation();
+        Vector3 cubePosition = cubeTransform.GetWorldPosition();
         RotationAxisAngle sphereRotation = sphereTransform.GetWorldRotation();
+        Vector3 spherePosition = sphereTransform.GetWorldPosition();
         
         //----------------------------------------------------------------------------------
 
@@ -84,14 +87,14 @@ int main(int argc, char* argv[])
 
             BeginMode3D(camera);
                 
-                DrawModelEx(cubeModel, cubeTransform.GetWorldPosition(), cubeRotation.axis, cubeRotation.angle * RAD2DEG, cubeTransform.GetWorldScale(), WHITE);
+                DrawModelEx(cubeModel, cubePosition, cubeRotation.axis, cubeRotation.angle, cubeTransform.GetWorldScale(), WHITE);
 
-                // std::cout << sphereRotation.axis.x << sphereRotation.axis.y << sphereRotation.axis.z << std::endl;
-                // std::cout << sphereRotation.angle << std::endl;
+                DrawModelEx(sphereModel, spherePosition, sphereRotation.axis, sphereRotation.angle, sphereTransform.GetWorldScale(), WHITE);
 
-                DrawModelEx(sphereModel, sphereTransform.GetWorldPosition(), sphereRotation.axis, sphereRotation.angle * RAD2DEG, sphereTransform.GetWorldScale(), WHITE);
+                std::cout << "Cube: " << cubePosition.x << " " << cubePosition.y << " " << cubePosition.z << std::endl;
+                std::cout << "Sphere: " << spherePosition.x << " " << spherePosition.y << " " << spherePosition.z << std::endl;
 
-                spin += 0.01f;
+                spin += 1.0f;
 
                 DrawGrid(10, 1.0f);
 

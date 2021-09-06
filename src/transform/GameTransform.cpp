@@ -16,6 +16,7 @@
 #include "GameTransform.h"
 #include "raymath.h"
 #include <iostream>
+#include <stdexcept>
 
 namespace GameEngine
 {
@@ -72,12 +73,28 @@ Vector3 GameTransform::GetWorldPosition() const
 {
     // Get transformation matrix.
     Matrix ltwMat = GetLocalToWorldMatrix();
-    // Extract world scale.
-    float scale_x = Vector3Length({ ltwMat.m0, ltwMat.m1, ltwMat.m2 });
-    float scale_y = Vector3Length({ ltwMat.m4, ltwMat.m5, ltwMat.m6 });
-    float scale_z = Vector3Length({ ltwMat.m8, ltwMat.m9, ltwMat.m10 });
-    // Extract world position.
-    return { ltwMat.m12 * scale_x, ltwMat.m13 * scale_y, ltwMat.m14 * scale_z };
+    // Extract rotation matrix.
+    Matrix rotationMatrix = ExtractRotation(ltwMat);
+    // Extract translation.
+    Vector3 worldPosition = ExtractTranslation(ltwMat);
+
+    // Check to see if world rotation is non-zero.
+    float matrixAngle = acos((rotationMatrix.m0 + rotationMatrix.m5 + rotationMatrix.m10 - 1) / 2);
+    // If rotation is zero, do not proceed to quaternion conversion.
+    if (matrixAngle <= EPSILON && matrixAngle >= -EPSILON)
+    {
+        return worldPosition;
+    }
+
+    // Get quaternion from matrix.
+    Quaternion rotationQuat = QuaternionFromMatrix(rotationMatrix);
+    if (isnan(rotationQuat.w) || isnan(rotationQuat.x) || isnan(rotationQuat.y) || isnan(rotationQuat.z))
+    {
+        throw std::runtime_error("Invalid quaternion created from rotation matrix!");
+    }
+    
+    // Tack on world rotation to position.
+    return Vector3RotateByQuaternion(worldPosition, rotationQuat);
 }
 
 RotationAxisAngle GameTransform::GetLocalRotation() const
@@ -90,40 +107,39 @@ RotationAxisAngle GameTransform::GetLocalRotation() const
     Vector3 rotationAxis = {0, 0, 0};
     float rotationAngle = 0;
     QuaternionToAxisAngle(rotation, &rotationAxis, &rotationAngle);
-    return { rotationAxis, rotationAngle };
+    return { rotationAxis, rotationAngle * RAD2DEG };
 }
 
 void GameTransform::SetLocalRotation(RotationAxisAngle rotation)
 {
-    this->rotation = QuaternionFromAxisAngle(rotation.axis, rotation.angle);
+    this->rotation = QuaternionFromAxisAngle(rotation.axis, rotation.angle * DEG2RAD);
 }
 
 RotationAxisAngle GameTransform::GetWorldRotation() const
 {
     // Get transformation matrix.
     Matrix ltwMat = GetLocalToWorldMatrix();
-    // Extract world scale.
-    float scale_x = Vector3Length({ ltwMat.m0, ltwMat.m1, ltwMat.m2 });
-    float scale_y = Vector3Length({ ltwMat.m4, ltwMat.m5, ltwMat.m6 });
-    float scale_z = Vector3Length({ ltwMat.m8, ltwMat.m9, ltwMat.m10 });
-    // Extract rotation matrix.
-    Matrix rotation_matrix = {
-        ltwMat.m0 / scale_x, ltwMat.m4 / scale_y, ltwMat.m8 / scale_z,  0.0f,
-        ltwMat.m1 / scale_x, ltwMat.m5 / scale_y, ltwMat.m9 / scale_z,  0.0f,
-        ltwMat.m2 / scale_x, ltwMat.m6 / scale_y, ltwMat.m10 / scale_z, 0.0f,
-        0.0f,                0.0f,                0.0f,                 1.0f
-    };
+    Matrix rotationMatrix = ExtractRotation(ltwMat);
 
-    Quaternion rotationQuat = QuaternionFromMatrix(rotation_matrix);
-    if (sqrtf(1.0f - rotationQuat.w*rotationQuat.w) < EPSILON)
+    // Check to see if rotation is non-zero.
+    float matrixAngle = acos((rotationMatrix.m0 + rotationMatrix.m5 + rotationMatrix.m10 - 1) / 2);
+    // If rotation is zero, do not proceed to quaternion conversion.
+    if (matrixAngle <= EPSILON && matrixAngle >= -EPSILON)
     {
         return { {0, 0, 0}, 0 };
+    }
+
+    // Get quaternion from matrix.
+    Quaternion rotationQuat = QuaternionFromMatrix(rotationMatrix);
+    if (isnan(rotationQuat.w) || isnan(rotationQuat.x) || isnan(rotationQuat.y) || isnan(rotationQuat.z))
+    {
+        throw std::runtime_error("Invalid quaternion created from rotation matrix!");
     }
     Vector3 rotationAxis = {0.0, 0.0, 0.0};
     float rotationAngle = 0.0;
     QuaternionToAxisAngle(rotationQuat, &rotationAxis, &rotationAngle);
 
-    return { rotationAxis, rotationAngle };
+    return { rotationAxis, rotationAngle * RAD2DEG };
 }
 
 Vector3 GameTransform::GetLocalScale() const
@@ -141,19 +157,37 @@ Vector3 GameTransform::GetWorldScale() const
     // Get transformation matrix.
     Matrix ltwMat = GetLocalToWorldMatrix();
     // Extract world scale.
-    return { 
-        Vector3Length({ ltwMat.m0, ltwMat.m1, ltwMat.m2 }), // Scale X
-        Vector3Length({ ltwMat.m4, ltwMat.m5, ltwMat.m6 }), // Scale Y
-        Vector3Length({ ltwMat.m8, ltwMat.m9, ltwMat.m10 }) // Scale Z
-    };
+    return ExtractScale(ltwMat);
 }
 
 Matrix GameTransform::GetLocalToWorldMatrix() const
 {
     if (parent)
     {
-        // Recursively multiply the current transformation with the parent.
-        return MatrixMultiply(parent->GetLocalToWorldMatrix(), MakeLocalToParent());
+        // Get parent matrix.
+        Matrix parentMatrix = parent->GetLocalToWorldMatrix();
+        Vector3 parentScale = ExtractScale(parentMatrix);
+        Matrix parentRotation = ExtractRotation(parentMatrix);
+        Vector3 parentTranslation = ExtractTranslation(parentMatrix);
+        // Get child matrix.
+        Matrix childMatrix = MakeLocalToParent();
+        Vector3 childScale = ExtractScale(childMatrix);
+        Matrix childRotation = ExtractRotation(childMatrix);
+        Vector3 childTranslation = ExtractTranslation(childMatrix);
+        // Multiply/add submatrices (S*R + T).
+        Vector3 scale = Vector3Multiply(parentScale, childScale);
+        Matrix rotation = MatrixMultiply(parentRotation, childRotation);
+        Vector3 position = Vector3Add(
+            Vector3Multiply(parentTranslation, parentScale),
+            childTranslation
+        );
+        // Re-compose matrix.
+        return {
+            rotation.m0 * scale.x, rotation.m4 * scale.y, rotation.m8 * scale.z,  position.x,
+            rotation.m1 * scale.x, rotation.m5 * scale.y, rotation.m9 * scale.z,  position.y,
+            rotation.m2 * scale.x, rotation.m6 * scale.y, rotation.m10 * scale.z, position.z,
+            0.0f,                  0.0f,                  0.0f,                   1.0f
+        };
     }
     else
     {
@@ -162,8 +196,6 @@ Matrix GameTransform::GetLocalToWorldMatrix() const
     }
 }
 
-// TODO: The matrix generation methods should not depend on transform state,
-// so as to allow passing in various positions. For example, to set the world position here.
 Matrix GameTransform::GetWorldToLocalMatrix() const
 {
     if (parent)
@@ -187,15 +219,15 @@ Matrix GameTransform::MakeLocalToParent() const
     Matrix rotationMatrix = QuaternionToMatrix(rotation);
     Matrix translationMatrix = MatrixTranslate(position.x, position.y, position.z);
     
-    // Order matters: scale * rotation + translation
-    Matrix product = MatrixMultiply(scaleMatrix, rotationMatrix);
-    Matrix transformationMatrix = MatrixMultiply(product, translationMatrix);
+    // Order matters: scale -> rotation -> translation.
+    Matrix transformationMatrix = MatrixMultiply(scaleMatrix, rotationMatrix);
+    transformationMatrix = MatrixMultiply(transformationMatrix, translationMatrix);
 
-    // std::cout << "Local Matrix: " << std::endl;
-    // std::cout << product.m0 << " " << product.m4 << " " << product.m8 << " " << product.m12 << std::endl;
-    // std::cout << product.m1 << " " << product.m5 << " " << product.m9 << " " << product.m13 << std::endl;
-    // std::cout << product.m2 << " " << product.m6 << " " << product.m10 << " " << product.m14 << std::endl;
-    // std::cout << product.m3 << " " << product.m7 << " " << product.m11 << " " << product.m15 << std::endl;
+    // std::cout << "Transformation matrix: " << std::endl;
+    // std::cout << transformationMatrix.m0 << " " << transformationMatrix.m4 << " " << transformationMatrix.m8 << " " << transformationMatrix.m12 << std::endl;
+    // std::cout << transformationMatrix.m1 << " " << transformationMatrix.m5 << " " << transformationMatrix.m9 << " " << transformationMatrix.m13 << std::endl;
+    // std::cout << transformationMatrix.m2 << " " << transformationMatrix.m6 << " " << transformationMatrix.m10 << " " << transformationMatrix.m14 << std::endl;
+    // std::cout << transformationMatrix.m3 << " " << transformationMatrix.m7 << " " << transformationMatrix.m11 << " " << transformationMatrix.m15 << std::endl;
 
     return transformationMatrix;
 }
@@ -221,6 +253,33 @@ Matrix GameTransform::MakeParentToLocal() const
     // return transformationMatrix;
 
     return MatrixInvert(MakeLocalToParent());
+}
+
+Vector3 GameTransform::ExtractTranslation(Matrix transform)
+{
+    return { transform.m12, transform.m13, transform.m14 };
+}
+
+Matrix GameTransform::ExtractRotation(Matrix transform)
+{
+    // Extract scale.
+    Vector3 scale = ExtractScale(transform);
+    // Extract rotation matrix.
+    return {
+        transform.m0 / scale.x, transform.m4 / scale.y, transform.m8 / scale.z,  0.0f,
+        transform.m1 / scale.x, transform.m5 / scale.y, transform.m9 / scale.z,  0.0f,
+        transform.m2 / scale.x, transform.m6 / scale.y, transform.m10 / scale.z, 0.0f,
+        0.0f,                0.0f,                0.0f,                 1.0f
+    };
+}
+
+Vector3 GameTransform::ExtractScale(Matrix transform)
+{
+    return { 
+        Vector3Length({ transform.m0, transform.m1, transform.m2 }), // Scale X
+        Vector3Length({ transform.m4, transform.m5, transform.m6 }), // Scale Y
+        Vector3Length({ transform.m8, transform.m9, transform.m10 }) // Scale Z
+    };
 }
 
 void GameTransform::SetParent(GameTransform* newParent, unsigned int childIndex)

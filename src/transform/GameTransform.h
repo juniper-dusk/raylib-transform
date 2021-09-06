@@ -68,6 +68,10 @@ public:
     // World to local space.
     Matrix GetWorldToLocalMatrix() const;
 
+    static Vector3 ExtractTranslation(Matrix transform);
+    static Matrix  ExtractRotation(Matrix transform);
+    static Vector3 ExtractScale(Matrix transform);
+
     // HIERARCHY OPERATIONS.
     void SetParent(GameTransform* newParent, unsigned int childIndex = 0);
 
@@ -81,12 +85,12 @@ protected:
     Vector3 position;
     // (W, X, Y, Z) quaternion describing rotation.
     Quaternion rotation;
-    // Store the axis/angle separately. Conversion is not well defined.
-    RotationAxisAngle rotationAxisAngle;
     // (X, Y, Z) scalar amounts.
     Vector3 scale;
 
-    // Matrix that transforms a point from local to world space.
+    Vector3 origin;
+
+    // Matrices.
     Matrix MakeLocalToParent() const;
     Matrix MakeParentToLocal() const;
 };
