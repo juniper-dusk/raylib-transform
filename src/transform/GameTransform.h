@@ -87,7 +87,7 @@ protected:
     Quaternion rotation;
     // (X, Y, Z) scalar amounts.
     Vector3 scale;
-
+    // Used as rotation axis.
     Vector3 origin;
 
     // Matrices.

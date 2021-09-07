@@ -21,7 +21,7 @@
 namespace GameEngine
 {
 
-const float EPSILON = 0.005;
+const float EPSILON = 0.001;
 
 GameTransform::GameTransform()
 {
@@ -73,37 +73,12 @@ Vector3 GameTransform::GetWorldPosition() const
 {
     // Get transformation matrix.
     Matrix ltwMat = GetLocalToWorldMatrix();
-    // Extract rotation matrix.
-    Matrix rotationMatrix = ExtractRotation(ltwMat);
     // Extract translation.
-    Vector3 worldPosition = ExtractTranslation(ltwMat);
-
-    // Check to see if world rotation is non-zero.
-    float matrixAngle = acos((rotationMatrix.m0 + rotationMatrix.m5 + rotationMatrix.m10 - 1) / 2);
-    // If rotation is zero, do not proceed to quaternion conversion.
-    if (matrixAngle <= EPSILON && matrixAngle >= -EPSILON)
-    {
-        return worldPosition;
-    }
-
-    // Get quaternion from matrix.
-    Quaternion rotationQuat = QuaternionFromMatrix(rotationMatrix);
-    if (isnan(rotationQuat.w) || isnan(rotationQuat.x) || isnan(rotationQuat.y) || isnan(rotationQuat.z))
-    {
-        throw std::runtime_error("Invalid quaternion created from rotation matrix!");
-    }
-    
-    // Tack on world rotation to position.
-    return Vector3RotateByQuaternion(worldPosition, rotationQuat);
+    return ExtractTranslation(ltwMat);
 }
 
 RotationAxisAngle GameTransform::GetLocalRotation() const
 {
-    // First verify that quaternion is not a scalar (i.e. no rotation).
-    if (sqrtf(1.0f - rotation.w*rotation.w) < EPSILON)
-    {
-        return { {0, 0, 0}, 0 };
-    }
     Vector3 rotationAxis = {0, 0, 0};
     float rotationAngle = 0;
     QuaternionToAxisAngle(rotation, &rotationAxis, &rotationAngle);
@@ -119,6 +94,14 @@ RotationAxisAngle GameTransform::GetWorldRotation() const
 {
     // Get transformation matrix.
     Matrix ltwMat = GetLocalToWorldMatrix();
+    Matrix transformationMatrix = ltwMat;
+
+    // std::cout << "World matrix: " << std::endl;
+    // std::cout << transformationMatrix.m0 << " " << transformationMatrix.m4 << " " << transformationMatrix.m8 << " " << transformationMatrix.m12 << std::endl;
+    // std::cout << transformationMatrix.m1 << " " << transformationMatrix.m5 << " " << transformationMatrix.m9 << " " << transformationMatrix.m13 << std::endl;
+    // std::cout << transformationMatrix.m2 << " " << transformationMatrix.m6 << " " << transformationMatrix.m10 << " " << transformationMatrix.m14 << std::endl;
+    // std::cout << transformationMatrix.m3 << " " << transformationMatrix.m7 << " " << transformationMatrix.m11 << " " << transformationMatrix.m15 << std::endl;
+
     Matrix rotationMatrix = ExtractRotation(ltwMat);
 
     // Check to see if rotation is non-zero.
@@ -165,29 +148,7 @@ Matrix GameTransform::GetLocalToWorldMatrix() const
     if (parent)
     {
         // Get parent matrix.
-        Matrix parentMatrix = parent->GetLocalToWorldMatrix();
-        Vector3 parentScale = ExtractScale(parentMatrix);
-        Matrix parentRotation = ExtractRotation(parentMatrix);
-        Vector3 parentTranslation = ExtractTranslation(parentMatrix);
-        // Get child matrix.
-        Matrix childMatrix = MakeLocalToParent();
-        Vector3 childScale = ExtractScale(childMatrix);
-        Matrix childRotation = ExtractRotation(childMatrix);
-        Vector3 childTranslation = ExtractTranslation(childMatrix);
-        // Multiply/add submatrices (S*R + T).
-        Vector3 scale = Vector3Multiply(parentScale, childScale);
-        Matrix rotation = MatrixMultiply(parentRotation, childRotation);
-        Vector3 position = Vector3Add(
-            Vector3Multiply(parentTranslation, parentScale),
-            childTranslation
-        );
-        // Re-compose matrix.
-        return {
-            rotation.m0 * scale.x, rotation.m4 * scale.y, rotation.m8 * scale.z,  position.x,
-            rotation.m1 * scale.x, rotation.m5 * scale.y, rotation.m9 * scale.z,  position.y,
-            rotation.m2 * scale.x, rotation.m6 * scale.y, rotation.m10 * scale.z, position.z,
-            0.0f,                  0.0f,                  0.0f,                   1.0f
-        };
+        return MatrixMultiply(MakeLocalToParent(), parent->GetLocalToWorldMatrix());
     }
     else
     {
@@ -198,32 +159,34 @@ Matrix GameTransform::GetLocalToWorldMatrix() const
 
 Matrix GameTransform::GetWorldToLocalMatrix() const
 {
-    if (parent)
-    {
-        // Recursively multiply the current transformation with the parent.
-        return MatrixMultiply(parent->MakeParentToLocal(), GetWorldToLocalMatrix());
-    }
-    else
-    {
-        // Base case: root node.
-        return MakeParentToLocal();
-    }
-    // To go in the opposite direction, simply invert the matrix.
-    // return MatrixInvert(GetLocalToWorldMatrix());
+    return MatrixInvert(GetLocalToWorldMatrix());
 }
 
 Matrix GameTransform::MakeLocalToParent() const
 {
     // Get matrices for transformation from local to parent.
     Matrix scaleMatrix = MatrixScale(scale.x, scale.y, scale.z);
+    // Get parent scale.
+    Vector3 parentScale = {1, 1, 1};
+    if ( parent )
+    {
+        parentScale = parent->GetLocalScale();
+    }
     Matrix rotationMatrix = QuaternionToMatrix(rotation);
     Matrix translationMatrix = MatrixTranslate(position.x, position.y, position.z);
-    
-    // Order matters: scale -> rotation -> translation.
+
     Matrix transformationMatrix = MatrixMultiply(scaleMatrix, rotationMatrix);
     transformationMatrix = MatrixMultiply(transformationMatrix, translationMatrix);
+    
+    // // Order matters: scale -> rotation -> translation.
+    // Matrix transformationMatrix = {
+    //     rotationMatrix.m0 * scale.x, rotationMatrix.m4 * scale.y, rotationMatrix.m8 * scale.z,  position.x,
+    //     rotationMatrix.m1 * scale.x, rotationMatrix.m5 * scale.y, rotationMatrix.m9 * scale.z,  position.y,
+    //     rotationMatrix.m2 * scale.x, rotationMatrix.m6 * scale.y, rotationMatrix.m10 * scale.z, position.z,
+    //     0.0f,                        0.0f,                        0.0f,                         1.0f
+    // };
 
-    // std::cout << "Transformation matrix: " << std::endl;
+    // std::cout << "Local to parent matrix: " << std::endl;
     // std::cout << transformationMatrix.m0 << " " << transformationMatrix.m4 << " " << transformationMatrix.m8 << " " << transformationMatrix.m12 << std::endl;
     // std::cout << transformationMatrix.m1 << " " << transformationMatrix.m5 << " " << transformationMatrix.m9 << " " << transformationMatrix.m13 << std::endl;
     // std::cout << transformationMatrix.m2 << " " << transformationMatrix.m6 << " " << transformationMatrix.m10 << " " << transformationMatrix.m14 << std::endl;
@@ -234,24 +197,6 @@ Matrix GameTransform::MakeLocalToParent() const
 
 Matrix GameTransform::MakeParentToLocal() const
 {
-    // Get inverse scale, avoid division by zero errors.
-    // Vector3 inverseScale = {
-    //     (scale.x == 0.0f ? 0.0f : 1.0f / scale.x),
-    //     (scale.y == 0.0f ? 0.0f : 1.0f / scale.y),
-    //     (scale.z == 0.0f ? 0.0f : 1.0f / scale.z)
-    // };
-    // Matrix inverseScaleMatrix = MatrixScale(inverseScale.x, inverseScale.y, inverseScale.z);
-    // // Get inverse rotation.
-    // Quaternion inverseRotation = QuaternionInvert(rotation);
-    // Matrix inverseRotationMatrix = QuaternionToMatrix(inverseRotation);
-    // // Get inverse translation.
-    // Matrix inverseTranslationMatrix = MatrixTranslate(position.x * -1, position.y * -1, position.z * -1);
-
-    // Matrix product = MatrixMultiply(inverseScaleMatrix, inverseRotationMatrix);
-    // Matrix transformationMatrix = MatrixAdd(product, MatrixMultiply(product, inverseTranslationMatrix));
-
-    // return transformationMatrix;
-
     return MatrixInvert(MakeLocalToParent());
 }
 

@@ -48,7 +48,7 @@ int main(int argc, char* argv[])
     // SPHERE.
     // Transform.
     GameTransform sphereTransform(
-        { 1.0, 1.0, 1.0 },
+        { 0.0, 1.0, 1.0 },
         {{ 1.0, 1.0, 1.0 }, 0.0},
         { 0.5, 0.5, 0.5 }
     );
@@ -70,12 +70,14 @@ int main(int argc, char* argv[])
         UpdateCamera(&camera);              // Update camera
         // Get rotation.
         // worldTransform.SetLocalRotation({ {0.0, 1.0, 0.0}, spin * 0.5f });
-        // cubeTransform.SetLocalRotation({ {0.0, 1.0, 0.0}, spin });
-        // sphereTransform.SetLocalRotation({ {1.0, 1.0, 1.0}, spin * 2 });
+        cubeTransform.SetLocalRotation({ {0.0, 1.0, 0.0}, spin });
+        // sphereTransform.SetLocalRotation({ {0.0, 1.0, 0.0}, spin });
         RotationAxisAngle cubeRotation = cubeTransform.GetWorldRotation();
         Vector3 cubePosition = cubeTransform.GetWorldPosition();
+        Vector3 cubeScale = cubeTransform.GetWorldScale();
         RotationAxisAngle sphereRotation = sphereTransform.GetWorldRotation();
         Vector3 spherePosition = sphereTransform.GetWorldPosition();
+        Vector3 sphereScale = sphereTransform.GetWorldScale();
         
         //----------------------------------------------------------------------------------
 
@@ -86,19 +88,37 @@ int main(int argc, char* argv[])
             ClearBackground(RAYWHITE);
 
             BeginMode3D(camera);
+
+                int ypos = 50;
                 
-                DrawModelEx(cubeModel, cubePosition, cubeRotation.axis, cubeRotation.angle, cubeTransform.GetWorldScale(), WHITE);
+                DrawModelEx(cubeModel, { cubePosition.x, cubePosition.y, cubePosition.z }, cubeRotation.axis, cubeRotation.angle, cubeTransform.GetWorldScale(), WHITE);
 
-                DrawModelEx(sphereModel, spherePosition, sphereRotation.axis, sphereRotation.angle, sphereTransform.GetWorldScale(), WHITE);
-
-                std::cout << "Cube: " << cubePosition.x << " " << cubePosition.y << " " << cubePosition.z << std::endl;
-                std::cout << "Sphere: " << spherePosition.x << " " << spherePosition.y << " " << spherePosition.z << std::endl;
+                DrawModelEx(sphereModel, { spherePosition.x, spherePosition.y, spherePosition.z }, sphereRotation.axis, sphereRotation.angle, sphereTransform.GetWorldScale(), WHITE);
 
                 spin += 1.0f;
 
                 DrawGrid(10, 1.0f);
 
             EndMode3D();
+
+            DrawText(TextFormat("Cube Pos: %3.2f %3.2f %3.2f",
+                                cubePosition.x,
+                                cubePosition.y,
+                                cubePosition.z), 10, ypos + 15, 10, BLACK);
+            DrawText(TextFormat("Cube Rot: %3.2f %3.2f %3.2f %3.2f",
+                                cubeRotation.axis.x,
+                                cubeRotation.axis.y,
+                                cubeRotation.axis.z,
+                                cubeRotation.angle), 10, ypos + 30, 10, BLACK);
+            DrawText(TextFormat("Sphere Pos: %3.2f %3.2f %3.2f",
+                                spherePosition.x,
+                                spherePosition.y,
+                                spherePosition.z), 10, ypos + 45, 10, BLACK);
+            DrawText(TextFormat("Sphere Rot: %3.2f %3.2f %3.2f %3.2f",
+                                sphereRotation.axis.x,
+                                sphereRotation.axis.y,
+                                sphereRotation.axis.z,
+                                sphereRotation.angle), 10, ypos + 60, 10, BLACK);
 
             DrawFPS(10, 10);
 
