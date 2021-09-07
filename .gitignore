@@ -1,5 +1,14 @@
+# System
+.vscode/
+
 # Prerequisites
 *.d
+
+# Build
+build/
+libs/
+.sconsign.dblite
+raylib_game
 
 # Object files
 *.o

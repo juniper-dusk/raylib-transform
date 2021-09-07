@@ -1,0 +1,37 @@
+import os
+
+env = Environment()
+
+# Build dependencies.
+lib = env.SConscript(['transform/SConscript'], variant_dir='build', exports='env')
+env.Install('libs', lib)
+
+# Build objects.
+input_files = ['TransformExample']
+object_list = []
+for input_file in input_files:
+    object_filename = 'build/' + input_file + '.o'
+    source_filename = input_file + '.cpp'
+    object_list.append(
+        env.Object(
+            target = object_filename,
+            source = source_filename,
+            CPPPATH='.'
+        )
+    )
+
+# Build exectuable.
+env.Program(
+    target='raylib_game',
+    source=object_list,
+    LIBS=[
+        'raylib',
+        'm',
+        'libGameTransform'
+    ],
+    LIBPATH=[
+        '/usr/local/lib',
+        'libs/'
+    ],
+    RPATH='libs/'
+)
