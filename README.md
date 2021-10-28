@@ -1,14 +1,8 @@
-## Raylib RPG 
+## Raylib Transform 
 
 ### Description
 
-Planned to be a pseudo-3D maze crawling RPG with pixel art graphics.
-
-### Features
-
- - Maze traversal.
- - Sword and magic combat.
- - 2D pixel art sprites.
+Transform hierarchy library for Raylib, programmed in C++.
 
 ### Developers
 
